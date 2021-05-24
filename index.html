@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<title>WebAudio Dattorro</title>
+	<style type="text/css">
+		* {	font-family: sans-serif; }
+		label, input+span { font-family: monospace; line-height: 2.2ex;}
+		input { height: 2.2ex; width: 50%;}
+		pre { font-family: monospace; font-size: 120%; background: black; color: white; padding: 15px 15px;
+			word-break: break-all;
+    		white-space: pre-wrap;
+		}
+		body {
+			margin: 20px auto;
+			max-width: 880px;
+			padding: 5px;
+		}
+		div>label {
+			width: 34%;
+			display: inline-block;
+		}
+		#controls>div {
+			display: flex;
+			align-items:center;
+		}
+		#clips { display: inline-block; }
+	</style>
+</head>
+<body>
+<div id="clips"></div>
+<button id="mic">Toggle Mic</button>
+<br><br>
+<div id="controls">
+	
+</div>
+
+<div>
+	<h2>
+		Progenitor
+	</h2>
+</div>
+</body>
+<script type="module">
+const 	aC  = new AudioContext();
+
+let audios   = ['placeboing', 'kikuo', 'kikuo2', 'sine'].map(a => new Audio(`./resources/${a}.wav`));
+
+let micState = false;
+
+Promise.all([
+	aC.audioWorklet.addModule('progenitorReverb.js')
+]).then(_ => {
+	let esrc = audios.map(a => aC.createMediaElementSource(a));
+	let m  = undefined;
+	let mg = aC.createGain();
+	let mx = aC.createGain();
+
+	let reverb = new AudioWorkletNode(aC, 'ProgenitorReverb', { outputChannelCount: [2] });
+	
+	esrc.forEach(src => src.connect(mx));
+	mg.connect(reverb);
+	mx.connect(reverb);
+	reverb.connect(aC.destination);
+
+	audios.forEach((aud, i) => {
+		let btn = document.createElement("button");
+		btn.innerText = `Play ${aud.src.split("/").pop()}`;
+		btn.onclick = _ => aC.resume() & audios[i].play();
+		clips.appendChild(btn);
+	})
+
+	mic.onclick = _ => {
+		if (micState) {
+			mg.gain.linearRampToValueAtTime(0, aC.currentTime + 0.1);
+			mic.style.background = '';
+			micState = false;
+		} else {
+			if(m == undefined)
+				navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+					m = aC.createMediaStreamSource(stream);
+					m.connect(mg);
+				}).catch(() => {
+					mic.style.background = '';
+					alert("Failed getting microphone.");
+					micState = false;
+				});
+			mg.gain.linearRampToValueAtTime(1, aC.currentTime + 0.1);
+			mic.style.background = 'darksalmon';
+			micState = true;
+		}
+	}
+
+}, e => {
+	console.error(e);
+});
+</script>
+</html>
