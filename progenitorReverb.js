@@ -10,7 +10,23 @@ CONNECTION WITH THE SOFTWARE OR THE DISTRIBUTION OF THE SOFTWARE.
 class ProgenitorReverb extends AudioWorkletProcessor {
 	
 	static get parameterDescriptors() {
-
+		return [	
+			["bandwidth"     , 0.812 , 0    , 1   , "k-rate"],	
+			["damping"       , 0.688 , 0    , 1   , "k-rate"],	
+			["decay1"        , 0.938 , 0.15 , 0.99, "k-rate"],
+			["diffusion1"    , 0.312 , 0    , 0.95, "k-rate"],
+			["decay2"        , 0.844 , 0.15 , 0.99, "k-rate"],
+			["diffusion2"    , 0.375 , 0    , 0.95, "k-rate"],
+			["definition"    , 0.25  , 0    , 0.45, "k-rate"],
+			["decay3"        , 0.906 , 0.15 , 0.99, "k-rate"],
+			["decayDiffusion", 0.406 , 0    , 0.80, "k-rate"],
+		].map(x => new Object({
+			name: x[0],
+			defaultValue: x[1],
+			minValue: x[2],
+			maxValue: x[3],
+			automationRate: x[4]
+		}));
 	}
 
 	constructor(options) {
@@ -18,64 +34,45 @@ class ProgenitorReverb extends AudioWorkletProcessor {
 		const s = sampleRate/34125;
 
 		this.basket = [];
+		this.A = {};
+		this.B = {};
 		const _ = new Proxy(this, { 
 			set: (target, prop, val, receiver) => {
 				this.basket.push(val);
-				Reflect.set(target, prop, val);
-				return true;
+				this[prop[0] == "A" ? "A" : "B"][prop.substr(1)] = val;
+				return Reflect.set(target, prop, val);
 			}
 		});
 
-		const BANW = 0.999,
-			  DAMP = 0.908,
-			  DEC1 = 0.989,
-			  DIF2 = 0.615,
-			  DEC2 = 0.984,
-			  DIF1 = 0.612,
-			  DEC3 = 0.985,
-			  DFTN = 0.455,
-			  DCDF = 0.476;
+		const defVal = name => ProgenitorReverb.parameterDescriptors.find(_ => _.name == name).defaultValue;
 
-		_.lp1 = new OnePoleLP(BANW);
-		_.lx1 = new Delay(1);
-		_.lp2 = new OnePoleLP(0.125);
-		_.dp1 = new OnePoleLP(DAMP);
+		[ 
+			[1, 0.125, 239, 2, 392, 1055   , 612, 1944, 344, 1264, 816, 1212, 121, 0.401, 0.781, 1572],
+			[1, 0.125, 205, 1, 329, 625+935, 368, 2032, 500, 1340, 688, 1452,  50, 0.512, 0.188,   16]
+		].forEach((wing, i) => {
+			wing = wing.map(_ => _*s);
+			i = i > 0 ? "B" : "A";
 
-		_.df2 = new AllPass(239*s, DIF2, DEC2);
-		_.dx1 = new Delay(2);
-		_.df1 = new AllPass(392*s, DIF1, DEC3);
-		_.dx2 = new Delay(1055*s);
+			_[i+"entryLPF"] = new OnePoleLP  (defVal("bandwidth"));
+			_[i+"entryDLY"] = new Delay      (wing[0]);
+			_[i+"tankLPF" ] = new OnePoleLP  (wing[1]);
+			_[i+"mixedLPF"] = new OnePoleLP  (defVal("damping"));
 
-		_.dd1 = new AllPassNest(612*s, DCDF, DEC2);
-		_.dd1.add(new AllPass(1944*s, DFTN, DEC1));
-		_.dx3 = new Delay(344*s);
-		_.dd2 = new AllPassNest(1264*s, DCDF, DEC2);
-		_.dd2.add(new AllPassNest(816*s, DFTN, DEC1))
-			 .add(new AllPassNest(1, DFTN, DEC1, false))
-			 .add(new Vibrato(1212*s, 121*s, 1.5/sampleRate), new CombForward(0.781));
-		_.xxx = new Delay(1572*s);
-// ----
-		_.lp3 = new OnePoleLP(BANW);
-		_.lx3 = new Delay(1);
-		_.lp4 = new OnePoleLP(0.125);
-		_.dp2 = new OnePoleLP(DAMP);
+			_[i+"dif1APF"] = new AllPass     (wing[2], defVal("diffusion2"), defVal("decay2"));
+			_[i+"dif1DLY"] = new Delay       (wing[3]);
+			_[i+"dif2APF"] = new AllPass     (wing[4], defVal("diffusion1"), defVal("decay3"));
+			_[i+"dif2DLY"] = new Delay       (wing[5]);
 
-		_.df3 = new AllPass(205*s, DIF2, DEC2);
-		_.dx4 = new Delay(1);
-		_.df4 = new AllPass(329*s, DIF1, DEC3);
-		_.dx5 = new Delay( (625 + 835)*s);
+			_[i+"dif3APN"] = new AllPassNest (wing[6], defVal("decayDiffusion"), defVal("decay2"));
+				this[i].dif3APN.add(this[i].dif3APNa = new AllPass(wing[7], defVal("definition"), defVal("decay1")));
+			_[i+"dif3DLY"] = new Delay       (wing[8]);
 
-		_.dd3 = new AllPassNest(368*s, DCDF, DEC2);
-		_.dd3.add(new AllPass(2032*s, DFTN, DEC1));
-		_.dx6 = new Delay(500*s);
-		_.dd4 = new AllPassNest(1340*s, DCDF, DEC2);
-		_.dd4.add(new AllPassNest(688*s, DFTN, DEC1))
-			 .add(new AllPassNest(1, DFTN, DEC1, false))
-			 .add(new Vibrato(1452*s, 5*s, 2/sampleRate ), new CombForward(0.188));
-		_.yyy = new Delay(16*s);
-
-		// _.vibrato = new Vibrato(1212*s, 121*s, 1.5/sampleRate);
-
+			_[i+"dif4APN"] = new AllPassNest (wing[9], defVal("decayDiffusion"), defVal("decay2"))
+				this[i].dif4APN	.add(this[i].dif4APNa = new AllPassNest(wing[10], defVal("definition"), defVal("decay1")))	
+								.add(this[i].dif4APNb = new AllPassNest(1, defVal("definition"), defVal("decay1"), false))
+						 		.series(new Vibrato(wing[11], wing[12], wing[13]/sampleRate), new CombForward(wing[14]))
+			_[i+"tankOut"] = new Delay(wing[15]);
+		});
 	}
 
 	// First input will be downmixed to mono if number of channels is not 2
@@ -83,56 +80,56 @@ class ProgenitorReverb extends AudioWorkletProcessor {
 	process(inputs, outputs, parameters) {
 		const s = sampleRate/34125;
 
+		this.A.entryLPF.a = this.B.entryLPF.a = parameters.bandwidth[0];
+		this.A.mixedLPF.a = this.B.mixedLPF.a = parameters.damping[0];
+		this.A.dif3APNa.decay = this.A.dif4APNa.decay = this.A.dif4APNb.decay = 
+		this.B.dif3APNa.decay = this.B.dif4APNa.decay = this.B.dif4APNb.decay = parameters.decay1[0];
+		this.A.dif2APF.k = this.B.dif2APF.k = parameters.diffusion1[0];
+		this.A.dif1APF.decay = this.A.dif3APN.decay = this.A.dif4APN.decay
+		this.B.dif1APF.decay = this.B.dif3APN.decay = this.B.dif4APN.decay = parameters.decay2[0];
+		this.A.dif1APF.k = this.B.dif1APF.k = parameters.diffusion2[0];
+		this.A.dif3APNa.k = this.A.dif4APNa.k = this.A.dif4APNb.k = 
+		this.B.dif3APNa.k = this.B.dif4APNa.k = this.B.dif4APNb.k = parameters.definition[0]
+		this.A.dif2APF.decay = this.B.dif2APF.decay = parameters.decay3[0];
+		this.A.dif3APN.k = this.A.dif4APN.k = 
+		this.B.dif3APN.k = this.B.dif4APN.k = parameters.decayDiffusion[0];
+
 		let i = 0|0;
 		let input = inputs[0];
-		const MIX = 1;
-		const KEEP = 1.6;
-		const IN = 1;
+		const MIX = 0.6;
+		const KEEP = 0.5;
+		const IN = 0.5;
+
 		while (i < 128) {
-			//this.vibrato.write(input[0][i]);
-			this.lp1.write(input[0][i]);
-			this.lx1.write(this.lp1.read());
-			this.lp2.write(this.yyy.read())
-			this.dp1.write(  IN*this.lx1.read()  
-							+   KEEP *(this.lp2.read() * (1-MIX)/2 + this.yyy.read() * MIX/2));
+			for (let j = 'A', k = 'B', p=0; p < 2; [j,k] = [k,j],p++ ) {
+				this[j].entryLPF.write(input[0][i]);
+				this[j].entryDLY.write(this[j].entryLPF.read());
+				this[j].tankLPF .write(this[k].tankOut.read())
+				this[j].mixedLPF.write(  IN*this[j].entryDLY.read()  
+								+   KEEP *(this[j].tankLPF.read() * (1-MIX)/2 + this[k].tankOut.read() * MIX/2));
+	
+				this[j].dif1APF.write(this[j].mixedLPF.read());
+				this[j].dif1DLY.write(this[j].dif1APF.read());
+				this[j].dif2APF.write(this[j].dif1DLY.read());
+				this[j].dif2DLY.write(this[j].dif2APF.read());
+	
+				this[j].dif3APN.write(this[j].dif2DLY.read());
+				this[j].dif3DLY.write(this[j].dif3APN.read());
+				this[j].dif4APN.write(this[j].dif3DLY.read());
+				this[j].tankOut.write(this[j].dif4APN.read());
+			}
 
-			this.df2.write(this.dp1.read());
-			this.dx1.write(this.df2.read());
-			this.df1.write(this.dx1.read());
-			this.dx2.write(this.df1.read());
+			outputs[0][0][i] = this.A.dif3DLY.readAt(~~(276*s)) * 0.938;
+			outputs[0][1][i] = this.B.dif3DLY.readAt(~~(468*s)) * 0.438 + this.B.dif2DLY.readAt(~~(625*s)) * 0.938
+							 - this.A.dif3DLY.readAt(~~(312*s)) * 0.438 + this.B.tankOut.readAt(~~(8*s)) * 0.125;
 
-			this.dd1.write(this.dx2.read());
-			this.dx3.write(this.dd1.read());
-			this.dd2.write(this.dx3.read());
-			this.xxx.write(this.dd2.read());
-
-			this.lp3.write(input[1][i]);
-			this.lx3.write(this.lp3.read());
-			this.lp3.write(this.xxx.read());
-			this.dp2.write( IN*this.lx3.read() 
-							+  KEEP *(this.lp3.read() * (1-MIX)/2 + this.xxx.read() * MIX/2));
-
-			this.df3.write(this.dp2.read());
-			this.dx4.write(this.df3.read());
-			this.df4.write(this.dx4.read());
-			this.dx5.write(this.df4.read());
-
-			this.dd3.write(this.dx5.read());
-			this.dx6.write(this.dd3.read());
-			this.dd4.write(this.dx6.read());
-			this.yyy.write(this.dd4.read());
-
-			outputs[0][0][i] = this.dx3.readAt(~~(276*s)) * 0.938;
-			outputs[0][1][i] = this.dx6.readAt(~~(468*s)) * 0.438 + this.dx5.readAt(~~(625*s)) * 0.938
-							 - this.dx3.readAt(~~(312*s)) * 0.438 + this.yyy.readAt(~~(8*s)) * 0.125;
-
-			// c = this.dx6.readAt(~~(24*s)  * 0.938 + this.xxx.readAt(~(36*s)) * 0.469);
-
+			outputs[0][2][i] = this.B.dif3DLY.readAt(~~( 24*s)) * 0.938 + this.A.tankOut.readAt(~~(36*s)) * 0.469;
+			outputs[0][3][i] = this.A.dif3DLY.readAt(~~( 40*s)) * 0.438 + this.A.dif2DLY.readAt(~~(225*s)) * 0.938
+							 - this.B.dif3DLY.readAt(~~(192*s)) * 0.438 + this.A.tankOut.readAt(~~(1572*s)) * 0.469;
 
 			this.basket.forEach(_ => _.update());
 			i++;
 		}
-
 		return true;
 	}
 }
@@ -167,6 +164,7 @@ class Delay {
 	}
 
 	// source: O. Niemitalo: https://www.musicdsp.org/en/latest/Other/49-cubic-interpollation.html
+	// i must be positive.
 	readCubicAt(i) {
 		let int  = ~~i + this.pRead - 1;
 			
@@ -187,55 +185,25 @@ class Delay {
 }
 class Vibrato {
 	constructor(length, depth = 5, rate = 1.0) {
-		length |= 0; // round down no matta what.
-		depth |= 0;
-
-		let nextPowerOfTwo = 2**Math.ceil(Math.log2((length + depth*2)));
-
-		this.tape = new Float32Array(nextPowerOfTwo);
+		this.tape = new Delay(length + depth*2);
 		this.depth = depth;
 		this.rate = rate;
-		this.phase = Math.random();
-		// indices / pointers
-		this.pRead = depth;
-		this.pWrite = length - 1;
+		this.phase = 0.0;
+		// adjust tape pointer
+		// this.tape.pRead = 0; //depth;
 	}
 
 	update() {
-		this.pRead = (this.pRead + 1) & (this.tape.length - 1);
-		this.pWrite = (this.pWrite + 1) & (this.tape.length - 1);
+		this.tape.update();
 		this.phase += 2*Math.PI * this.rate;
 	}
 
 	write(input) {
-		return this.tape[this.pWrite] = input;
+		return this.tape.write(input);
 	}
 
 	read() {
-		return this.readCubicAt(Math.cos(this.phase)*this.depth);
-	}
-
-	readAt(index) {
-		return this.tape[(this.pRead + index) & (this.tape.length - 1)];
-	}
-
-	// source: O. Niemitalo: https://www.musicdsp.org/en/latest/Other/49-cubic-interpollation.html
-	readCubicAt(i) {
-		let int  = ~~i + this.pRead - 1;
-			
-		const frac = i-~~i,
-			mask = this.tape.length - 1,
-
-			x0 = this.tape[int++ & mask],
-			x1 = this.tape[int++ & mask],
-			x2 = this.tape[int++ & mask],
-			x3 = this.tape[int   & mask],
-
-			a  = (3*(x1-x2) - x0 + x3) / 2,
-			b  = 2*x2 + x0 - (5*x1+x3) / 2,
-			c  = (x2-x0) / 2;
-
-		return (((a * frac) + b) * frac + c) * frac + x1;
+		return this.tape.readCubicAt((Math.cos(this.phase)+1)*this.depth);
 	}
 }
 
@@ -257,7 +225,7 @@ class AllPass {
 	}
 
 	read() {
-		return this.d.read() * this.decay + this.inputNode * this.k * -1;
+		return (this.d.read() * this.decay) + (this.inputNode * this.k * -1);
 	}
 }
 
@@ -284,7 +252,10 @@ class AllPassNest extends Nestable {
 		this.k = k;
 		this.decay = decay;
 		this.inputNode = 0.0;
+		this.outputNode = 0.0;
 		this.dfDelay = defaultDelay;
+
+		if (!defaultDelay) this.read = this.read2;
 
 		return this;
 	}
@@ -297,15 +268,16 @@ class AllPassNest extends Nestable {
 
 	write(input) {
 		this.inputNode = this.d.read() * this.k + input;
-		let last = this.inputNode;
+		this.outputNode = this.inputNode;
 		for (let i = 0; i < this.nested.length; i++) {
-			this.nested[i].write(last);
-			last = this.nested[i].read();
+			this.nested[i].write(this.outputNode);
+			this.outputNode = this.nested[i].read();
 		}
-		if (this.dfDelay)
-			return this.d.write(last);
-		else
-			return last;
+		return this.d.write(this.outputNode);
+	}
+	
+	read2() {
+		return this.outputNode * this.decay + this.inputNode * this.k * -1;
 	}
 
 	read() {

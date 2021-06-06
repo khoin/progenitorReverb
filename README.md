@@ -1,7 +1,11 @@
 Dattorro - Progenitor reverb
 =====
 
-A rather clean reverb, but there's noticeable repetitions, which might be an implementation fault. 
+A rather clean reverb, but there are noticeable repetitions, which might be an implementation fault. 
+
+## Source 
+
+https://www.convexoptimization.com/wikimization/index.php/Dattorro_Convex_Optimization_of_a_Reverberator
 
 ## Other Works
 
