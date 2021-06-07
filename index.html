@@ -11,6 +11,10 @@
 			padding: 5px;
 			line-height: 1.5em;
 		}
+		pre { font-family: monospace; font-size: 120%; background: black; color: white; padding: 15px 15px;
+			word-break: break-all;
+    		white-space: pre-wrap;
+		}
 	</style>
 	<script type="text/javascript" src="./resources/minimalcomps.min.js"></script>
 </head>
@@ -18,7 +22,7 @@
 <div id="mc"></div>
 <div>
 	<h2>
-		Progenitor Reverb - Draft implementation
+		Progenitor Reverb implementation
 	</h2>
 	<p>Adapted to be as close as possible to chart linked here: <a href="https://www.convexoptimization.com/wikimization/index.php/Dattorro_Convex_Optimization_of_a_Reverberator">convexoptimization.com/[...]/Dattorro_Convex_Optimization_of_a_Reverberator</a> <br>
 		As such, the knobs are the labels listed on the diagram, and not meant to be the most user-friendly. <br>
@@ -40,6 +44,14 @@
 	<p>
 		<li>The reverb has a 4 channel output. Need to figure out if this is correctly rendered.</li>
 	</p>
+	<h3>To use this reverb, put progenitorReverb.js in your folder, then: </h3>
+<pre>
+aC.audioWorklet.addModule('progenitorReverb.js').then(() => {
+  let reverb = new AudioWorkletNode(aC, 'ProgenitorReverb', { outputChannelCount: [4] });
+  inputNode.connect(reverb);
+  reverb.connect(destinationNode);
+});
+</pre>
 </div>
 </body>
 <script type="module">
