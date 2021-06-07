@@ -20,22 +20,25 @@
 	<h2>
 		Progenitor Reverb - Draft implementation
 	</h2>
-	<p>Adapted to be as close as possible to chart linked here: <a href="https://www.convexoptimization.com/wikimization/index.php/Dattorro_Convex_Optimization_of_a_Reverberator">https://www.convexoptimization.com/wikimization/index.php/Dattorro_Convex_Optimization_of_a_Reverberator</a> <br>
-		As such, the knobs are the labels listed on the diagram, and not meant to be the most user-friendly.
+	<p>Adapted to be as close as possible to chart linked here: <a href="https://www.convexoptimization.com/wikimization/index.php/Dattorro_Convex_Optimization_of_a_Reverberator">convexoptimization.com/[...]/Dattorro_Convex_Optimization_of_a_Reverberator</a> <br>
+		As such, the knobs are the labels listed on the diagram, and not meant to be the most user-friendly. <br>
+		A possible simplification: Damping, Dry/Wet, Early Lvl, Late Lvl, Early Diffuse, Late Diffuse.
 	</p>
 	<p>
-		Beware of the sound! In some configurations, the tank can blow up! The "Panic!" button is there to help yourself.
+		<em>Beware of the sound!</em> In some configurations, the tank can blow up! The "Panic!" button is there to help yourself. <br>
+		Also, you can copy the URL and the current state of the reverb would be saved along with it.
 	</p>
 	<h3>
 		Sources:
 	</h3>
-		<li>UI : bit101 - <a href="https://github.com/bit101/minimalcomps2">minicomps2</a></li>
-		<li>Freesound - Placeboing<a href="https://freesound.org/people/placeboing/sounds/338387/">338387</a></li>
+		<li><a href="https://github.com/khoin/progenitorReverb">Source Code</a></li>
+		<li>Controls interface: bit101 - <a href="https://github.com/bit101/minimalcomps2">minicomps2</a></li>
+		<li>Freesound - Placeboing <a href="https://freesound.org/people/placeboing/sounds/338387/">338387</a></li>
 		<li>Freesound - goldendiaphragm <a href="https://freesound.org/people/goldendiaphragm/sounds/242720/">242720</a></li>
 		<li>Clips from Kikuo - Mikukikuo5</li>
 	<h3>To-do:</h3>
 	<p>
-		<li>Simplify OnePole LPF, CombForward,</li>
+		<li>The reverb has a 4 channel output. Need to figure out if this is correctly rendered.</li>
 	</p>
 </div>
 </body>
@@ -158,8 +161,6 @@ let initialize = _ => {
 
 	// preset dropdown
 	new Label(new Dropdown(firstLine, 0, 0, PRESETS.map(x => x[0]), 0, e => {
-		console.log("e.detail: ", e.detail);
-		console.log(PRESETS[PRESETS.flat().indexOf(e.target.text)/2]);
 		location.hash = PMAP.map((x,i) => [x, PRESETS[PRESETS.flat().indexOf(e.target.text)/2][1][i]]).flat().join(",");
 		applyPreset();
 		}),0, -17, "Presets");

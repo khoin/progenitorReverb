@@ -47,8 +47,8 @@ class ProgenitorReverb extends AudioWorkletProcessor {
 		const defVal = name => ProgenitorReverb.parameterDescriptors.find(_ => _.name == name).defaultValue;
 
 		[ 
-			[1, 0.125, 239, 2, 392, 1055   , 612, 1944, 344, 1264, 816, 1212, 121, 0.401, 0.781, 1572],
-			[1, 0.125, 205, 1, 329, 625+935, 368, 2032, 500, 1340, 688, 1452,  50, 0.512, 0.188,   16]
+			[1, 0.125, 239, 2, 392, 1055   , 612, 1944, 344, 1264, 816, 1212, 121, 0.301, 0.781, 1572],
+			[1, 0.125, 205, 1, 329, 625+935, 368, 2032, 500, 1340, 688, 1452,  5 , 0.412, 0.188,   16]
 		].forEach((wing, i) => {
 			wing = wing.map(_ => _*s);
 			i = i > 0 ? "B" : "A";
@@ -188,9 +188,7 @@ class Vibrato {
 		this.tape = new Delay(length + depth*2);
 		this.depth = depth;
 		this.rate = rate;
-		this.phase = 0.0;
-		// adjust tape pointer
-		// this.tape.pRead = 0; //depth;
+		this.phase = Math.random();
 	}
 
 	update() {
@@ -220,8 +218,7 @@ class AllPass {
 	}
 
 	write(input) {
-		this.inputNode = this.d.read() * this.k + input;
-		return this.d.write(this.inputNode);
+		return this.d.write(this.inputNode = this.d.read() * this.k + input);
 	}
 
 	read() {
@@ -287,18 +284,15 @@ class AllPassNest extends Nestable {
 
 class OnePoleLP {
 	constructor(bwidth) {
-		this.d = new Delay(1);
+		this.d = 0.0;
 		this.a = bwidth;
 		this.inputNode = 0.0;
 	}
 
-	update() {
-		this.d.update();
-	}
+	update() { }
 
 	write(input) {
-		this.inputNode = this.d.read() * (1 - this.a) + input * this.a;
-		return this.d.write(this.inputNode);
+		return this.d = this.inputNode = this.d * (1 - this.a) + input * this.a;;
 	}
 
 	read() {
@@ -312,15 +306,15 @@ class CombForward {
 		this.k = k;
 		this.inputNode = 0.0;
 	}
-	update() {
-		this.d.update();
-	}
+
+	update() { }
+
 	write(input) {
-		this.inputNode = input;
-		return this.d.write(input);
+		return this.d = this.inputNode = input;
 	}
+
 	read() {
-		return this.inputNode * this.k + this.d.read() * (1 - this.k);
+		return this.inputNode * this.k + this.d * (1 - this.k);
 	}
 }
 
