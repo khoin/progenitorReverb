@@ -36,6 +36,8 @@ class ProgenitorReverb extends AudioWorkletProcessor {
 		this.basket = [];
 		this.A = {};
 		this.B = {};
+		// It seems to me that a Proxy approach is "shorter" to write than a class-based one.
+		// Of course, this makes the code harder to read.
 		const _ = new Proxy(this, { 
 			set: (target, prop, val, receiver) => {
 				this.basket.push(val);
@@ -75,8 +77,6 @@ class ProgenitorReverb extends AudioWorkletProcessor {
 		});
 	}
 
-	// First input will be downmixed to mono if number of channels is not 2
-	// Outputs Stereo.
 	process(inputs, outputs, parameters) {
 		const s = sampleRate/34125;
 
@@ -85,7 +85,7 @@ class ProgenitorReverb extends AudioWorkletProcessor {
 		this.A.dif3APNa.decay = this.A.dif4APNa.decay = this.A.dif4APNb.decay = 
 		this.B.dif3APNa.decay = this.B.dif4APNa.decay = this.B.dif4APNb.decay = parameters.decay1[0];
 		this.A.dif2APF.k = this.B.dif2APF.k = parameters.diffusion1[0];
-		this.A.dif1APF.decay = this.A.dif3APN.decay = this.A.dif4APN.decay
+		this.A.dif1APF.decay = this.A.dif3APN.decay = this.A.dif4APN.decay = 
 		this.B.dif1APF.decay = this.B.dif3APN.decay = this.B.dif4APN.decay = parameters.decay2[0];
 		this.A.dif1APF.k = this.B.dif1APF.k = parameters.diffusion2[0];
 		this.A.dif3APNa.k = this.A.dif4APNa.k = this.A.dif4APNb.k = 
@@ -96,29 +96,31 @@ class ProgenitorReverb extends AudioWorkletProcessor {
 
 		let i = 0|0;
 		let input = inputs[0];
-		const MIX = 0.6;
-		const KEEP = 0.5;
-		const IN = 0.5;
+
+		let processWing = (j,k) => {
+			let wing = this[j];
+			let other = this[k];
+			wing.entryLPF.write(input[0][i]);
+			wing.entryDLY.write(wing.entryLPF.read());
+			wing.tankLPF .write(other.tankOut.read())
+			wing.mixedLPF.write(  0.5 * wing.entryDLY.read()  
+							+   wing.tankLPF.read() * 0.156  + other.tankOut.read() * 0.344);
+
+			wing.dif1APF.write(wing.mixedLPF.read());
+			wing.dif1DLY.write(wing.dif1APF.read());
+			wing.dif2APF.write(wing.dif1DLY.read());
+			wing.dif2DLY.write(wing.dif2APF.read());
+
+			wing.dif3APN.write(wing.dif2DLY.read());
+			wing.dif3DLY.write(wing.dif3APN.read());
+			wing.dif4APN.write(wing.dif3DLY.read());
+			wing.tankOut.write(wing.dif4APN.read());
+		}
 
 		while (i < 128) {
-			for (let j = 'A', k = 'B', p=0; p < 2; [j,k] = [k,j],p++ ) {
-				this[j].entryLPF.write(input[0][i]);
-				this[j].entryDLY.write(this[j].entryLPF.read());
-				this[j].tankLPF .write(this[k].tankOut.read())
-				this[j].mixedLPF.write(  IN*this[j].entryDLY.read()  
-								+   KEEP *(this[j].tankLPF.read() * (1-MIX)/2 + this[k].tankOut.read() * MIX/2));
-	
-				this[j].dif1APF.write(this[j].mixedLPF.read());
-				this[j].dif1DLY.write(this[j].dif1APF.read());
-				this[j].dif2APF.write(this[j].dif1DLY.read());
-				this[j].dif2DLY.write(this[j].dif2APF.read());
-	
-				this[j].dif3APN.write(this[j].dif2DLY.read());
-				this[j].dif3DLY.write(this[j].dif3APN.read());
-				this[j].dif4APN.write(this[j].dif3DLY.read());
-				this[j].tankOut.write(this[j].dif4APN.read());
-			}
-
+			processWing('A', 'B');
+			processWing('B', 'A');
+			
 			outputs[0][0][i] = this.A.dif3DLY.readAt(~~(276*s)) * 0.938;
 			outputs[0][1][i] = this.B.dif3DLY.readAt(~~(468*s)) * 0.438 + this.B.dif2DLY.readAt(~~(625*s)) * 0.938
 							 - this.A.dif3DLY.readAt(~~(312*s)) * 0.438 + this.B.tankOut.readAt(~~(8*s)) * 0.125;
@@ -138,9 +140,7 @@ class Delay {
 	constructor(length) {
 		length |= 0; // round down no matta what.
 
-		let nextPowerOfTwo = 2**Math.ceil(Math.log2((length)));
-
-		this.tape = new Float32Array(nextPowerOfTwo);
+		this.tape = new Float32Array(2**Math.ceil(Math.log2((length))));
 		// indices / pointers
 		this.pRead = 0;
 		this.pWrite = length - 1;
@@ -302,7 +302,7 @@ class OnePoleLP {
 
 class CombForward {
 	constructor(k) {
-		this.d = new Delay(1);
+		this.d = 0.0;
 		this.k = k;
 		this.inputNode = 0.0;
 	}
